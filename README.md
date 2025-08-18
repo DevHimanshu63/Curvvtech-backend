@@ -508,6 +508,7 @@ The system includes automated background jobs:
 
 
 
+
 ---
 
 **Built with ❤️ for Curvvtech Backend Developer Assignment**
