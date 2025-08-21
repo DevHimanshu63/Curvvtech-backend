@@ -9,16 +9,39 @@ services:
       - NODE_ENV=development
       - PORT=3000
       - MONGODB_URI=mongodb://mongo:27017/smart_device_platform
+      - REDIS_URL=redis://redis:6379
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - JWT_SECRET=your-super-secret-jwt-key-change-in-production
-      - JWT_EXPIRES_IN=24h
+      - JWT_REFRESH_SECRET=your-super-secret-refresh-key-change-in-production
+      - JWT_EXPIRES_IN=15m
+      - JWT_REFRESH_EXPIRES_IN=7d
       - RATE_LIMIT_WINDOW_MS=60000
       - RATE_LIMIT_MAX_REQUESTS=100
+      - AUTH_RATE_LIMIT_MAX_REQUESTS=5
+      - AUTH_RATE_LIMIT_WINDOW_MS=900000
       - DEVICE_INACTIVITY_THRESHOLD=24
+      - CACHE_TTL_DEVICES=1800
+      - CACHE_TTL_USERS=1800
+      - CACHE_TTL_ANALYTICS=300
+      - EMAIL_HOST=smtp.gmail.com
+      - EMAIL_PORT=587
+      - EMAIL_USER=your-email@gmail.com
+      - EMAIL_PASS=your-app-password
+      - EMAIL_FROM=noreply@smartdeviceplatform.com
+      - WS_PORT=3001
+      - WS_CORS_ORIGIN=http://localhost:3000
+      - MAX_FILE_SIZE=10485760
+      - UPLOAD_PATH=./uploads
+      - ENABLE_PERFORMANCE_LOGGING=true
+      - SLOW_QUERY_THRESHOLD=1000
     depends_on:
       - mongo
+      - redis
     volumes:
       - ./src:/app/src
       - ./logs:/app/logs
+      - ./uploads:/app/uploads
     restart: unless-stopped
 
   mongo:
@@ -30,6 +53,15 @@ services:
     volumes:
       - mongodb_data:/data/db
       - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
     restart: unless-stopped
 
   mongo-express:
@@ -47,5 +79,16 @@ services:
       - mongo
     restart: unless-stopped
 
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    ports:
+      - "8082:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+
 volumes:
   mongodb_data:
+  redis_data:

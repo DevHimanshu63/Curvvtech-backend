@@ -1,0 +1,158 @@
+config:
+  target: 'http://localhost:3000'
+  phases:
+    - duration: 60
+      arrivalRate: 10
+      name: "Warm up phase"
+    - duration: 120
+      arrivalRate: 50
+      name: "Sustained load"
+    - duration: 60
+      arrivalRate: 100
+      name: "Peak load"
+    - duration: 30
+      arrivalRate: 10
+      name: "Cool down"
+  defaults:
+    headers:
+      Content-Type: 'application/json'
+
+scenarios:
+  - name: "Authentication Flow"
+    weight: 20
+    flow:
+      - post:
+          url: "/auth/signup"
+          json:
+            name: "Test User {{ $randomString() }}"
+            email: "test{{ $randomString() }}@example.com"
+            password: "SecurePass123"
+            role: "user"
+          capture:
+            - json: "$.success"
+              as: "signupSuccess"
+      
+      - post:
+          url: "/auth/login"
+          json:
+            email: "test{{ $randomString() }}@example.com"
+            password: "SecurePass123"
+          capture:
+            - json: "$.accessToken"
+              as: "accessToken"
+            - json: "$.refreshToken"
+              as: "refreshToken"
+      
+      - get:
+          url: "/auth/profile"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+
+  - name: "Device Management"
+    weight: 40
+    flow:
+      - post:
+          url: "/auth/login"
+          json:
+            email: "testuser@example.com"
+            password: "SecurePass123"
+          capture:
+            - json: "$.accessToken"
+              as: "accessToken"
+      
+      - get:
+          url: "/devices"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+      
+      - post:
+          url: "/devices"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+          json:
+            name: "Test Device {{ $randomString() }}"
+            type: "light"
+            status: "active"
+      
+      - get:
+          url: "/devices?type=light&status=active"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+
+  - name: "Analytics and Logs"
+    weight: 30
+    flow:
+      - post:
+          url: "/auth/login"
+          json:
+            email: "testuser@example.com"
+            password: "SecurePass123"
+          capture:
+            - json: "$.accessToken"
+              as: "accessToken"
+      
+      - get:
+          url: "/devices"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+          capture:
+            - json: "$.devices[0].id"
+              as: "deviceId"
+      
+      - get:
+          url: "/devices/{{ deviceId }}/logs?limit=10"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+      
+      - get:
+          url: "/devices/{{ deviceId }}/usage?range=24h"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+
+  - name: "Export Jobs"
+    weight: 10
+    flow:
+      - post:
+          url: "/auth/login"
+          json:
+            email: "testuser@example.com"
+            password: "SecurePass123"
+          capture:
+            - json: "$.accessToken"
+              as: "accessToken"
+      
+      - get:
+          url: "/devices"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+          capture:
+            - json: "$.devices[0].id"
+              as: "deviceId"
+      
+      - post:
+          url: "/exports/jobs"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+          json:
+            type: "device-logs-csv"
+            options:
+              deviceId: "{{ deviceId }}"
+              startDate: "2024-01-01T00:00:00Z"
+              endDate: "2024-12-31T23:59:59Z"
+          capture:
+            - json: "$.jobId"
+              as: "jobId"
+      
+      - get:
+          url: "/exports/jobs/{{ jobId }}"
+          headers:
+            Authorization: "Bearer {{ accessToken }}"
+
+  - name: "Health and Metrics"
+    weight: 5
+    flow:
+      - get:
+          url: "/health"
+      
+      - get:
+          url: "/metrics"

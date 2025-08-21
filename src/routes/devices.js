@@ -1,6 +1,7 @@
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const { validate, validateQuery } = require('../middleware/validate');
+const { cacheMiddleware, invalidateDeviceCache, cacheKeys } = require('../middleware/cache');
 const { 
   createDeviceSchema, 
   updateDeviceSchema, 
@@ -23,16 +24,28 @@ router.use(authenticateToken);
 // POST /devices - Register new device
 router.post('/', validate(createDeviceSchema), createDevice);
 
-// GET /devices - List devices with filtering
-router.get('/', validateQuery(deviceQuerySchema), getDevices);
+// GET /devices - List devices with filtering (cached for 30 minutes)
+router.get('/', 
+  validateQuery(deviceQuerySchema), 
+  cacheMiddleware(parseInt(process.env.CACHE_TTL_DEVICES) || 1800, cacheKeys.deviceList),
+  getDevices
+);
 
-// PATCH /devices/:id - Update device details
-router.patch('/:id', validate(updateDeviceSchema), updateDevice);
+// PATCH /devices/:id - Update device details (invalidates cache)
+router.patch('/:id', 
+  validate(updateDeviceSchema), 
+  invalidateDeviceCache,
+  updateDevice
+);
 
-// DELETE /devices/:id - Remove device
-router.delete('/:id', deleteDevice);
+// DELETE /devices/:id - Remove device (invalidates cache)
+router.delete('/:id', invalidateDeviceCache, deleteDevice);
 
-// POST /devices/:id/heartbeat - Update device heartbeat
-router.post('/:id/heartbeat', validate(heartbeatSchema), updateHeartbeat);
+// POST /devices/:id/heartbeat - Update device heartbeat (invalidates cache)
+router.post('/:id/heartbeat', 
+  validate(heartbeatSchema), 
+  invalidateDeviceCache,
+  updateHeartbeat
+);
 
 module.exports = router;

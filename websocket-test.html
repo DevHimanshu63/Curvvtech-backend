@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test - Smart Device Platform</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .messages {
+            background: #f5f5f5;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            margin: 10px 0;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #007bff;
+            background: white;
+        }
+        .error {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+        }
+        .success {
+            border-left-color: #28a745;
+            background: #d4edda;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        input {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            width: 300px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 3px;
+        }
+        .connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔌 WebSocket Test - Smart Device Platform</h1>
+    
+    <div class="container">
+        <h3>Connection Setup</h3>
+        <input type="text" id="accessToken" placeholder="Enter your access token" />
+        <input type="text" id="deviceId" placeholder="Enter device ID" />
+        <button onclick="connect()">Connect</button>
+        <button onclick="disconnect()">Disconnect</button>
+        <div id="connectionStatus" class="status disconnected">Disconnected</div>
+    </div>
+
+    <div class="container">
+        <h3>Device Operations</h3>
+        <button onclick="subscribe()">Subscribe to Device</button>
+        <button onclick="unsubscribe()">Unsubscribe from Device</button>
+        <button onclick="sendHeartbeat()">Send Heartbeat</button>
+        <button onclick="sendStatusUpdate()">Send Status Update</button>
+    </div>
+
+    <div class="container">
+        <h3>Real-time Messages</h3>
+        <div id="messages" class="messages"></div>
+        <button onclick="clearMessages()">Clear Messages</button>
+    </div>
+
+    <script>
+        let socket = null;
+        let isConnected = false;
+
+        function connect() {
+            const token = document.getElementById('accessToken').value;
+            const deviceId = document.getElementById('deviceId').value;
+            
+            if (!token) {
+                addMessage('Please enter an access token', 'error');
+                return;
+            }
+
+            // Disconnect if already connected
+            if (socket) {
+                socket.disconnect();
+            }
+
+            // Create new connection
+            socket = io('http://localhost:3000', {
+                auth: {
+                    token: token
+                }
+            });
+
+            // Connection events
+            socket.on('connect', () => {
+                isConnected = true;
+                updateConnectionStatus('Connected', 'connected');
+                addMessage('✅ Connected to WebSocket server', 'success');
+            });
+
+            socket.on('disconnect', () => {
+                isConnected = false;
+                updateConnectionStatus('Disconnected', 'disconnected');
+                addMessage('❌ Disconnected from WebSocket server', 'error');
+            });
+
+            socket.on('connect_error', (error) => {
+                addMessage('❌ Connection error: ' + error.message, 'error');
+                updateConnectionStatus('Connection Failed', 'disconnected');
+            });
+
+            // Server events
+            socket.on('connected', (data) => {
+                addMessage('🎉 Server welcome: ' + data.message, 'success');
+                addMessage('User ID: ' + data.userId, 'success');
+            });
+
+            socket.on('device-update', (data) => {
+                addMessage('📊 Device Update: ' + JSON.stringify(data, null, 2), 'success');
+            });
+
+            socket.on('notification', (notification) => {
+                addMessage('🔔 Notification: ' + JSON.stringify(notification, null, 2), 'success');
+            });
+
+            // Error handling
+            socket.on('error', (error) => {
+                addMessage('❌ Socket error: ' + error, 'error');
+            });
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+        }
+
+        function subscribe() {
+            if (!isConnected) {
+                addMessage('❌ Not connected. Please connect first.', 'error');
+                return;
+            }
+
+            const deviceId = document.getElementById('deviceId').value;
+            if (!deviceId) {
+                addMessage('❌ Please enter a device ID', 'error');
+                return;
+            }
+
+            socket.emit('subscribe-device', deviceId);
+            addMessage('📡 Subscribed to device: ' + deviceId, 'success');
+        }
+
+        function unsubscribe() {
+            if (!isConnected) {
+                addMessage('❌ Not connected. Please connect first.', 'error');
+                return;
+            }
+
+            const deviceId = document.getElementById('deviceId').value;
+            if (!deviceId) {
+                addMessage('❌ Please enter a device ID', 'error');
+                return;
+            }
+
+            socket.emit('unsubscribe-device', deviceId);
+            addMessage('📡 Unsubscribed from device: ' + deviceId, 'success');
+        }
+
+        function sendHeartbeat() {
+            if (!isConnected) {
+                addMessage('❌ Not connected. Please connect first.', 'error');
+                return;
+            }
+
+            const deviceId = document.getElementById('deviceId').value;
+            if (!deviceId) {
+                addMessage('❌ Please enter a device ID', 'error');
+                return;
+            }
+
+            const heartbeatData = {
+                deviceId: deviceId,
+                status: 'active',
+                lastActiveAt: new Date().toISOString()
+            };
+
+            socket.emit('device-heartbeat', heartbeatData);
+            addMessage('💓 Sent heartbeat: ' + JSON.stringify(heartbeatData), 'success');
+        }
+
+        function sendStatusUpdate() {
+            if (!isConnected) {
+                addMessage('❌ Not connected. Please connect first.', 'error');
+                return;
+            }
+
+            const deviceId = document.getElementById('deviceId').value;
+            if (!deviceId) {
+                addMessage('❌ Please enter a device ID', 'error');
+                return;
+            }
+
+            const statusData = {
+                deviceId: deviceId,
+                status: 'active',
+                metadata: {
+                    temperature: Math.random() * 30 + 10,
+                    humidity: Math.random() * 50 + 30,
+                    timestamp: new Date().toISOString()
+                }
+            };
+
+            socket.emit('device-status-update', statusData);
+            addMessage('📊 Sent status update: ' + JSON.stringify(statusData), 'success');
+        }
+
+        function addMessage(message, type = 'message') {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message ' + type;
+            messageDiv.innerHTML = '<strong>' + new Date().toLocaleTimeString() + '</strong>: ' + message;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function updateConnectionStatus(status, className) {
+            const statusDiv = document.getElementById('connectionStatus');
+            statusDiv.textContent = status;
+            statusDiv.className = 'status ' + className;
+        }
+
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+        }
+
+        // Auto-connect if token is provided
+        document.getElementById('accessToken').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                connect();
+            }
+        });
+
+        // Add some helpful instructions
+        addMessage('🚀 Welcome to WebSocket Test!', 'success');
+        addMessage('1. Enter your access token (get it from login API)', 'message');
+        addMessage('2. Enter a device ID (get it from device creation)', 'message');
+        addMessage('3. Click Connect to establish WebSocket connection', 'message');
+        addMessage('4. Use the buttons to test real-time features', 'message');
+    </script>
+</body>
+</html>

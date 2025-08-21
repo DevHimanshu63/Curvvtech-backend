@@ -1,4 +1,5 @@
 const Device = require('../models/Device');
+const webSocketService = require('../services/websocketService');
 
 // POST /devices - Create new device
 const createDevice = async (req, res) => {
@@ -17,6 +18,13 @@ const createDevice = async (req, res) => {
     });
 
     await device.save();
+
+    // Broadcast device creation to WebSocket subscribers
+    webSocketService.broadcastDeviceStatusUpdate(
+      device._id.toString(),
+      device.status,
+      { action: 'created', device: device.toJSON() }
+    );
 
     res.status(201).json({
       success: true,
@@ -95,6 +103,9 @@ const updateDevice = async (req, res) => {
       });
     }
 
+    // Store old status for comparison
+    const oldStatus = device.status;
+
     // Update device
     Object.keys(updateData).forEach(key => {
       if (updateData[key] !== undefined) {
@@ -103,6 +114,15 @@ const updateDevice = async (req, res) => {
     });
 
     await device.save();
+
+    // Broadcast status change if status was updated
+    if (oldStatus !== device.status) {
+      webSocketService.broadcastDeviceStatusUpdate(
+        device._id.toString(),
+        device.status,
+        { action: 'updated', oldStatus, newStatus: device.status }
+      );
+    }
 
     res.json({
       success: true,
@@ -135,6 +155,13 @@ const deleteDevice = async (req, res) => {
 
     await Device.findByIdAndDelete(id);
 
+    // Broadcast device deletion to WebSocket subscribers
+    webSocketService.broadcastDeviceStatusUpdate(
+      device._id.toString(),
+      'deleted',
+      { action: 'deleted', deviceId: device._id.toString() }
+    );
+
     res.json({
       success: true,
       message: 'Device deleted successfully'
@@ -165,8 +192,27 @@ const updateHeartbeat = async (req, res) => {
       });
     }
 
+    // Store old status for comparison
+    const oldStatus = device.status;
+
     // Update heartbeat
     await device.updateHeartbeat(status);
+
+    // Broadcast heartbeat to WebSocket subscribers
+    webSocketService.broadcastDeviceHeartbeat(
+      device._id.toString(),
+      device.status,
+      device.last_active_at
+    );
+
+    // Broadcast status change if status was updated
+    if (oldStatus !== device.status) {
+      webSocketService.broadcastDeviceStatusUpdate(
+        device._id.toString(),
+        device.status,
+        { action: 'heartbeat', oldStatus, newStatus: device.status }
+      );
+    }
 
     res.json({
       success: true,
